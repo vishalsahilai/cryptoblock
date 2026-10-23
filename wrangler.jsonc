@@ -10,7 +10,7 @@
     {
       "binding": "DB",
       "database_name": "cryptoblock-db",
-      "database_id": "00000000-0000-4000-8000-000000000000",
+      "database_id": "d923e51e-c63a-46aa-b9e6-ae371b52b04e",
       "migrations_dir": "drizzle"
     }
   ],
