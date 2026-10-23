@@ -1,0 +1,1 @@
+ALTER TABLE `account_alerts` ADD `upper` real;

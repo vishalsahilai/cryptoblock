@@ -1,0 +1,3 @@
+import {marketIntelligence} from '../../../lib/market-intelligence.mjs';
+import {CRYPTO_UNIVERSE} from '../../../public/radar/radar.mjs';
+export async function GET(request){const symbol=new URL(request.url).searchParams.get('symbol');if(!CRYPTO_UNIVERSE.has(symbol))return Response.json({error:'Unsupported symbol'},{status:400});const key=new Request(new URL('/api/intelligence?symbol='+symbol+'&v=1',request.url));let cache;try{cache=globalThis.caches?.default;const hit=await cache?.match(key);if(hit)return hit;}catch{}const d=await marketIntelligence(symbol),r=Response.json(d,{headers:{'Cache-Control':'public, max-age=30'}});try{await cache?.put(key,r.clone());}catch{}return r;}

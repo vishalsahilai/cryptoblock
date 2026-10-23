@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {demoCandles,analyze,evaluate,parseKlines,ema} from './public/radar/engine.mjs';
+test('demo datasets are repeatable and OHLC bounds hold',()=>{const c=demoCandles('BTC','1h');assert.deepEqual(c,demoCandles('BTC','1h'));for(const x of c){assert(x.h>=Math.max(x.o,x.c));assert(x.l<=Math.min(x.o,x.c));assert(x.v>0);}});
+test('all intervals and coins produce finite bounded scores',()=>{for(const s of ['BTC','ETH','SOL','SUI'])for(const tf of ['15m','1h','4h','1d']){const a=analyze(demoCandles(s,tf));assert(a.score>=0&&a.score<=100);assert(Number.isFinite(a.support));assert(Number.isFinite(a.resistance));}});
+test('forming candles cannot alter closed-bar analysis or evaluation',()=>{const c=demoCandles('ETH','1h');const forming={...c.at(-1),c:1e9,h:1e9,closed:false};assert.deepEqual(analyze([...c,forming]),analyze(c));assert.deepEqual(evaluate([...c,forming]),evaluate(c));});
+test('evaluation has nonoverlapping future windows and correct baseline on an uptrend',()=>{const c=Array.from({length:100},(_,i)=>({t:i*3600000,o:100+i,h:102+i,l:99+i,c:101+i,v:100,closed:true}));const r=evaluate(c);assert.equal(r.total,5);assert.equal(r.rate,100);assert.equal(r.baseline,100);assert.equal(r.start,c[70].t);});
+test('past EMA values cannot change when future candles are appended',()=>{const c=demoCandles('BTC','1h').map(x=>x.c);assert.deepEqual(ema(c.slice(0,200),21),ema(c,21).slice(0,200));});
+test('a closed candle past the far edge invalidates prior bullish blocks',()=>{const c=demoCandles('BTC','1h'),last=c.at(-1);const a=analyze([...c,{...last,o:last.c,c:1,l:1,h:last.c,v:100,t:last.t+3600000}]);assert(a.zones.every(z=>z.kind!=='Bullish'));});
+test('malformed API data fails rather than rendering fake live data',()=>{assert.throws(()=>parseKlines({code:-1}));assert.throws(()=>parseKlines([]));assert.throws(()=>analyze([]));});

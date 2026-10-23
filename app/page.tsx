@@ -1,0 +1,1 @@
+export default function Home(){return <iframe title="CryptoBlock market intelligence" src="/radar/index.html" style={{position:'fixed',inset:0,width:'100%',height:'100dvh',border:0,background:'#f4f6f4'}}/>;}

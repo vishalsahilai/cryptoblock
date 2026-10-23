@@ -1,0 +1,8 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {TradeFlow} from './public/radar/flow.mjs';
+const t=1000000;
+test('Percentages measure volume, not trade count, and total 100',()=>{const f=new TradeFlow();f.add([{i:'a',T:t,S:'Buy',v:'9'},{i:'b',T:t,S:'Sell',v:'1'},{i:'c',T:t,S:'Sell',v:'2'}],t);const s=f.summary(t);assert.equal(s.count,3);assert.equal(s.buyPct,75);assert.equal(s.sellPct,25);assert.equal(s.buyPct+s.sellPct,100);});
+test('REST/stream overlaps are deduplicated by execution ID',()=>{const f=new TradeFlow();f.add([{execId:'a',time:String(t),side:'Buy',size:'10'}],t);f.add([{i:'a',T:t,S:'Buy',v:'10'}],t);assert.equal(f.summary(t).buy,10);assert.equal(f.summary(t).count,1);});
+test('Empty, invalid and expired samples never invent a percentage',()=>{const f=new TradeFlow();f.add([{i:'a',T:t,S:'Buy',v:'NaN'},{i:'b',T:t,S:'Bad',v:'1'},{i:'c',T:t-300001,S:'Sell',v:2}],t);assert.equal(f.summary(t).buyPct,null);f.add([{i:'ok',T:t,S:'Buy',v:1}],t);assert.equal(f.summary(t).buyPct,100);assert.equal(f.summary(t+300001).buyPct,null);});
+test('Retains latest executions even when batch arrives out of order',()=>{const f=new TradeFlow({limit:2});f.add([{i:'b',T:t-1,S:'Buy',v:2},{i:'c',T:t,S:'Sell',v:3},{i:'a',T:t-2,S:'Buy',v:20}],t);assert.equal(f.summary(t).total,5);assert.equal(f.summary(t).oldest,t-1);});
+
+test('Cross-market notional uses execution prices, independently of base-volume shares',()=>{const f=new TradeFlow();f.add([{i:'a',T:t,S:'Buy',v:2,p:100},{i:'b',T:t,S:'Sell',v:3,p:90}],t);const s=f.summary(t);assert.equal(s.buyPct,40);assert.equal(s.quoteBuy,200);assert.equal(s.quoteSell,270);assert.equal(f.trades.get('a').price,100);});

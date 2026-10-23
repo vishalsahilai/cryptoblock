@@ -1,0 +1,19 @@
+// Context only: these classifications are not evidence of trader intent.
+export function positioning(pricePct,oiPct){if(!Number.isFinite(pricePct)||!Number.isFinite(oiPct))return 'Unavailable';if(Math.abs(pricePct)<.05||Math.abs(oiPct)<.1)return 'Mixed / little change';return oiPct>0?(pricePct>0?'Possible long build-up':'Possible short build-up'):(pricePct>0?'Possible short covering':'Possible long unwinding');}
+export function dataQuality(m,{now=Date.now(),minutes=1,duration=null,demo=false}={}){
+ const c=(m.c??[]).filter(x=>x.closed!==false),last=c.at(-1),step=minutes*60000,f=m.flow?.summary(now);let gaps=0;for(let i=1;i<c.length;i++)if(c[i].t-c[i-1].t!==step)gaps++;
+ const age=last?Math.max(0,now-(last.t+step)):null,flowAge=f?.total?Math.max(0,now-f.newest):null;
+ const flags=[];if(!last)flags.push('No closed candles');if(age!=null&&age>step*2)flags.push('Candle feed stale');if(gaps)flags.push(gaps+' candle gaps');if(!f?.total)flags.push('No trade sample');else {if(flowAge>30000)flags.push('Trade sample stale');if(f.count<30)flags.push('Sparse trade sample');}
+ if(duration&&last&&c[0].t>now-duration)flags.push('Partial selected-range history');
+ return {state:demo?'Synthetic demo':flags.length?'Limited evidence':'Checks passed',flags,candleCount:c.length,gaps,candleAgeMs:age,flowAgeMs:flowAge,trades:f?.count??0,observedMs:f?.total?f.newest-f.oldest:null};
+}
+export function referenceLevels(candles){const c=candles.filter(x=>x.closed!==false),last=c.at(-1);if(!last)return {};const highs=[],lows=[];for(let i=2;i<c.length-2;i++){const w=c.slice(i-2,i+3);if(c[i].h===Math.max(...w.map(x=>x.h))&&c[i].h>last.c)highs.push(c[i].h);if(c[i].l===Math.min(...w.map(x=>x.l))&&c[i].l<last.c)lows.push(c[i].l);}const rs=[...new Set(highs)].sort((a,b)=>a-b),ss=[...new Set(lows)].sort((a,b)=>b-a);return {r1:rs[0]??null,r2:rs[1]??null,s1:ss[0]??null,s2:ss[1]??null};}
+export function liquidationTotals(rows){let long=0,short=0;for(const r of rows){const v=+r.v,p=+r.p;if(!Number.isFinite(v)||!Number.isFinite(p)||v<=0||p<=0)continue;if(r.S==='Buy')long+=v*p;else if(r.S==='Sell')short+=v*p;}return {long,short};}
+export function samplePressure(rows,now=Date.now()){const seen=new Set(),xs=rows.filter(x=>{if(!x.id||seen.has(x.id)||!['buy','sell'].includes(x.side)||![x.time,x.size,x.price].every(Number.isFinite)||x.size<=0||x.price<=0||x.time<now-300000||x.time>now+1000)return false;seen.add(x.id);return true;});if(!xs.length)return null;const buy=xs.filter(x=>x.side==='buy').reduce((s,x)=>s+x.size,0),sell=xs.filter(x=>x.side==='sell').reduce((s,x)=>s+x.size,0);return {buyPct:100*buy/(buy+sell),count:xs.length,start:Math.min(...xs.map(x=>x.time)),end:Math.max(...xs.map(x=>x.time)),fresh:now-Math.max(...xs.map(x=>x.time))<30000};}
+
+export function derivativeEvidence({oi:oiRows=[],price:priceRows=[],accounts:accountRows=[],funding:fundingRows=[]},now=Date.now()){
+ const oi=oiRows.map(x=>({t:+x.timestamp,v:+x.openInterest})).filter(x=>Number.isFinite(x.t)&&Number.isFinite(x.v)&&x.v>0&&x.t<=now).sort((a,b)=>a.t-b.t),latest=oi.at(-1),previous=oi.at(-2);let position=null;
+ if(latest&&previous&&latest.t-previous.t===3600000&&now-latest.t<7200000){const k=priceRows.find(r=>+r[0]===previous.t);if(k&&+k[1]>0&&+k[4]>0){const priceChange=(+k[4]/+k[1]-1)*100,oiChange=(latest.v/previous.v-1)*100;position={start:previous.t,end:latest.t,priceChange,oiChange,label:positioning(priceChange,oiChange)};}}
+ const a=accountRows[0],long=+(a?.buyRatio),short=+(a?.sellRatio),at=+(a?.timestamp),accounts=Number.isFinite(long)&&Number.isFinite(short)&&long>=0&&short>=0&&Math.abs(long+short-1)<.02&&at<=now&&now-at<7200000?{long:long*100,short:short*100,time:at}:null;
+ const funding=fundingRows.map(x=>({time:+x.fundingRateTimestamp,rate:+x.fundingRate*100})).filter(x=>Number.isFinite(x.rate)&&Number.isFinite(x.time)&&x.time<=now).sort((a,b)=>b.time-a.time);
+return {position,accounts,funding};}
